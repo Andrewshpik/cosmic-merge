@@ -34,8 +34,12 @@ const nextOrbEl = document.getElementById('next-orb');
 const tierListEl = document.getElementById('tier-list');
 const gameOverScreen = document.getElementById('game-over');
 const finalStatsEl = document.getElementById('final-stats');
+const historyScreen = document.getElementById('history-screen');
+const historyContentEl = document.getElementById('history-content');
 document.getElementById('reset').onclick = () => resetGame();
 document.getElementById('restart-btn').onclick = () => resetGame();
+document.getElementById('history').onclick = () => showHistory();
+document.getElementById('history-close').onclick = () => historyScreen.classList.add('hidden');
 
 // ---------- Canvas sizing ----------
 function fitCanvas() {
@@ -264,24 +268,30 @@ function formatDate(ts) {
   return `${pad(d.getDate())}.${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function renderRecords(records, withTitle) {
+  if (!records.length) return '<div class="records-empty">Пока нет сыгранных партий</div>';
+  const title = withTitle ? '<div class="records-title">Последние игры</div>' : '';
+  return `${title}<ol class="records-list">${records.map((r) => `
+    <li><span class="r-score">${r.score}</span><span class="r-tier">${r.tier || ''}</span><span class="r-date">${formatDate(r.date)}</span></li>
+  `).join('')}</ol>`;
+}
+
+function showHistory() {
+  historyContentEl.innerHTML = renderRecords(loadRecords(), false);
+  historyScreen.classList.remove('hidden');
+}
+
 function gameOver() {
   if (!running) return;
   running = false;
   sfx.gameOver();
   saveRecord({ score, tier: TIERS[unlockedTier].name, date: Date.now() });
   const best = parseInt(localStorage.getItem('cosmicmerge.best') || '0', 10);
-  const records = loadRecords();
-  const recordsHtml = records.length
-    ? `<div class="records-title">Последние игры</div>
-       <ol class="records-list">${records.map((r) => `
-         <li><span class="r-score">${r.score}</span><span class="r-tier">${r.tier || ''}</span><span class="r-date">${formatDate(r.date)}</span></li>
-       `).join('')}</ol>`
-    : '';
   finalStatsEl.innerHTML = `
     Score: <b>${score}</b><br>
     Best: <b>${best}</b><br>
     Эволюция: <b>${TIERS[unlockedTier].name}</b>
-    ${recordsHtml}
+    ${renderRecords(loadRecords(), true)}
   `;
   gameOverScreen.classList.remove('hidden');
 }

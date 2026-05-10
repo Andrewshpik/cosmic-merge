@@ -13,6 +13,7 @@
       <div class="stats">
         <div class="stat"><span class="label">Score</span><span id="score">0</span></div>
         <div class="stat"><span class="label">Best</span><span id="best">0</span></div>
+        <button id="history" title="История">🏆</button>
         <button id="reset" title="Restart">↻</button>
       </div>
     </header>
@@ -36,6 +37,12 @@
       <h1>GAME OVER</h1>
       <div id="final-stats"></div>
       <button id="restart-btn">Заново</button>
+    </div>
+
+    <div id="history-screen" class="overlay hidden">
+      <h1>ИСТОРИЯ</h1>
+      <div id="history-content"></div>
+      <button id="history-close">Закрыть</button>
     </div>
   </div>
 
