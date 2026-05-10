@@ -244,6 +244,59 @@ main {
 }
 #final-stats b { color: var(--text); font-size: 22px; }
 
+.records-title {
+  margin-top: 18px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.records-list {
+  list-style: none;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.4;
+  min-width: 260px;
+  counter-reset: rec;
+}
+
+.records-list li {
+  display: grid;
+  grid-template-columns: 22px 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  counter-increment: rec;
+}
+.records-list li:last-child { border-bottom: none; }
+.records-list li::before {
+  content: counter(rec);
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+}
+
+.records-list .r-score {
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.records-list .r-tier {
+  color: var(--muted);
+  font-size: 12px;
+}
+.records-list .r-date {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
 .hidden { display: none !important; }
 
 /* Mobile */

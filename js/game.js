@@ -242,15 +242,46 @@ function loadBest() {
   bestEl.textContent = best;
 }
 
+function loadRecords() {
+  try {
+    const raw = localStorage.getItem('cosmicmerge.records');
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecord(entry) {
+  const records = loadRecords();
+  records.unshift(entry);
+  localStorage.setItem('cosmicmerge.records', JSON.stringify(records.slice(0, 10)));
+}
+
+function formatDate(ts) {
+  const d = new Date(ts);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function gameOver() {
   if (!running) return;
   running = false;
   sfx.gameOver();
+  saveRecord({ score, tier: TIERS[unlockedTier].name, date: Date.now() });
   const best = parseInt(localStorage.getItem('cosmicmerge.best') || '0', 10);
+  const records = loadRecords();
+  const recordsHtml = records.length
+    ? `<div class="records-title">Последние игры</div>
+       <ol class="records-list">${records.map((r) => `
+         <li><span class="r-score">${r.score}</span><span class="r-tier">${r.tier || ''}</span><span class="r-date">${formatDate(r.date)}</span></li>
+       `).join('')}</ol>`
+    : '';
   finalStatsEl.innerHTML = `
     Score: <b>${score}</b><br>
     Best: <b>${best}</b><br>
     Эволюция: <b>${TIERS[unlockedTier].name}</b>
+    ${recordsHtml}
   `;
   gameOverScreen.classList.remove('hidden');
 }
