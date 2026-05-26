@@ -100,6 +100,11 @@ for (let i = 0; i < 60; i++) {
 let engine, world;
 let orbs = [];
 let particles = [];
+let shockwaves = [];
+let comboBanner = null;
+let comboCount = 0;
+let lastMergeTime = 0;
+const COMBO_WINDOW_MS = 800;
 let score = 0;
 let unlockedTier = 0;
 let nextTier = pickSpawnTier();
@@ -171,8 +176,19 @@ function mergeOrbs(a, b) {
     y: (a.velocity.y + b.velocity.y) / 4 - 0.5,
   });
 
-  // Score: tier value
-  score += (tier + 1) * 10;
+  // Combo: count merges happening close in time within one drop's chain
+  const now = performance.now();
+  if (now - lastMergeTime < COMBO_WINDOW_MS) {
+    comboCount++;
+  } else {
+    comboCount = 1;
+  }
+  lastMergeTime = now;
+
+  // Score: base + combo bonus (+50% per extra level)
+  const base = (tier + 1) * 10;
+  const bonus = Math.floor(base * (comboCount - 1) * 0.5);
+  score += base + bonus;
   if (tier > unlockedTier) unlockedTier = tier;
   updateScoreUI();
   updateTierUI(unlockedTier);
@@ -199,6 +215,44 @@ function mergeOrbs(a, b) {
   if (tier === TIERS.length - 1) {
     sfx.galaxy();
   }
+
+  // Combo power-up from x2: banner + shockwave that pushes nearby orbs apart
+  if (comboCount >= 2) {
+    showComboBanner(comboCount, x, y);
+    triggerShockwave(x, y, comboCount, newOrb);
+    sfx.combo(comboCount);
+  }
+}
+
+function showComboBanner(combo, x, y) {
+  comboBanner = {
+    text: `COMBO x${combo}`,
+    bonusText: combo >= 2 ? `+${Math.floor((combo - 1) * 50)}%` : '',
+    x,
+    y: Math.max(110, y - 30),
+    life: 1.1,
+    maxLife: 1.1,
+    combo,
+  };
+}
+
+function triggerShockwave(x, y, combo, skipBody) {
+  const radius = 120 + combo * 40;
+  const strength = 0.0008 * combo;
+  for (const o of orbs) {
+    if (o === skipBody) continue;
+    const dx = o.position.x - x;
+    const dy = o.position.y - y;
+    const dist = Math.hypot(dx, dy);
+    if (dist <= 0 || dist > radius) continue;
+    const falloff = 1 - dist / radius;
+    const mag = strength * falloff * o.mass;
+    Body.applyForce(o, o.position, {
+      x: (dx / dist) * mag,
+      y: (dy / dist) * mag - 0.0002 * o.mass * falloff, // slight upward bias
+    });
+  }
+  shockwaves.push({ x, y, r: 8, maxR: radius, life: 0.45, maxLife: 0.45, combo });
 }
 
 function removeOrb(body) {
@@ -219,6 +273,9 @@ function dropOrb() {
   nextTier = pickSpawnTier();
   updateNextPreview();
   canDropAt = now + 350;
+  // Combo belongs to a single drop's chain; reset on a new drop
+  comboCount = 0;
+  lastMergeTime = 0;
   sfx.drop();
 }
 
@@ -304,6 +361,10 @@ function resetGame() {
   }
   orbs = [];
   particles = [];
+  shockwaves = [];
+  comboBanner = null;
+  comboCount = 0;
+  lastMergeTime = 0;
   aboveLineTimes.clear();
   score = 0;
   unlockedTier = 0;
@@ -380,6 +441,11 @@ class Sfx {
   galaxy() {
     [262, 330, 392, 523, 659].forEach((f, i) =>
       setTimeout(() => this._tone({ freq: f, type: 'triangle', dur: 0.4, vol: 0.12 }), i * 90));
+  }
+  combo(level) {
+    const base = 440 + Math.min(level, 6) * 90;
+    this._tone({ freq: base, freqEnd: base * 1.6, type: 'square', dur: 0.14, vol: 0.06 });
+    setTimeout(() => this._tone({ freq: base * 1.5, freqEnd: base * 2.2, type: 'square', dur: 0.12, vol: 0.05 }), 60);
   }
   gameOver() {
     [330, 280, 220, 165].forEach((f, i) =>
@@ -472,6 +538,55 @@ function drawPreviewOrb(time) {
   drawOrb(x, y, 0, nextTier, 0.95);
 }
 
+function drawShockwaves(dt) {
+  for (const sw of shockwaves) {
+    sw.life -= dt;
+    sw.r = sw.maxR * (1 - sw.life / sw.maxLife);
+  }
+  shockwaves = shockwaves.filter(sw => sw.life > 0);
+  ctx.save();
+  for (const sw of shockwaves) {
+    const a = sw.life / sw.maxLife;
+    ctx.globalAlpha = a * 0.7;
+    ctx.strokeStyle = sw.combo >= 4 ? '#fff5a0' : (sw.combo >= 3 ? '#ff6bd0' : '#7cd6e3');
+    ctx.lineWidth = 2 + sw.combo * 0.5;
+    ctx.shadowColor = ctx.strokeStyle;
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.arc(sw.x, sw.y, sw.r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawComboBanner(dt) {
+  if (!comboBanner) return;
+  comboBanner.life -= dt;
+  if (comboBanner.life <= 0) { comboBanner = null; return; }
+
+  const t = comboBanner.life / comboBanner.maxLife;
+  const alpha = Math.min(1, t * 1.4);
+  const scale = 1 + (1 - t) * 0.4;
+  const y = comboBanner.y - (1 - t) * 36;
+  const color = comboBanner.combo >= 4 ? '#fff5a0' : (comboBanner.combo >= 3 ? '#ff6bd0' : '#7cd6e3');
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 18;
+  ctx.font = `bold ${Math.floor(28 * scale)}px -apple-system, "Segoe UI", system-ui, sans-serif`;
+  ctx.fillText(comboBanner.text, comboBanner.x, y);
+  if (comboBanner.bonusText) {
+    ctx.font = `600 ${Math.floor(14 * scale)}px -apple-system, "Segoe UI", system-ui, sans-serif`;
+    ctx.globalAlpha = alpha * 0.85;
+    ctx.fillText(comboBanner.bonusText, comboBanner.x, y + 22 * scale);
+  }
+  ctx.restore();
+}
+
 function drawParticles(dt) {
   for (const p of particles) {
     p.x += p.vx;
@@ -512,7 +627,9 @@ function loop(now) {
     drawOrb(o.position.x, o.position.y, o.angle, o.tier, 1);
   }
 
+  drawShockwaves(dt);
   drawParticles(dt);
+  drawComboBanner(dt);
   drawPreviewOrb(now);
 
   requestAnimationFrame(loop);
